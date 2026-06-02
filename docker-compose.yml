@@ -2,21 +2,37 @@ services:
   web:
     image: node:24-bookworm-slim
     working_dir: /app
-    command: sh -c "corepack enable && yarn install --frozen-lockfile && yarn dev:web --host 0.0.0.0"
+    command: sh -c "corepack enable && yarn install --frozen-lockfile && yarn dev:web --host 0.0.0.0 --port 3000"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - .:/app
     environment:
-      - NUXT_PUBLIC_API_BASE=http://localhost:8787
+      - NUXT_PUBLIC_API_BASE=/api
+      - NUXT_API_INTERNAL_BASE=http://api:8787
+    depends_on:
+      - api
+    networks:
+      - control-center
 
   api:
     image: python:3.11-slim
     working_dir: /app/apps/api
-    command: sh -c "pip install -r requirements-dev.txt && uvicorn app.main:app --host 0.0.0.0 --port 8787 --reload"
-    ports:
-      - "8787:8787"
+    command: sh -c "pip install -r requirements-dev.txt && uvicorn app.main:app --host 0.0.0.0 --port 8787"
+    expose:
+      - "8787"
     volumes:
       - .:/app
+      - /root/.hermes/state.db:/root/.hermes/state.db:ro
+      - /srv/syncthing/kb-private:/srv/syncthing/kb-private:ro
+      - /srv/syncthing/kb-shared:/srv/syncthing/kb-shared:ro
     environment:
+      - HERMES_STATE_DB=/root/.hermes/state.db
       - HERMES_CONTROL_ALLOWED_ROOTS=/srv/syncthing/kb-private:/srv/syncthing/kb-shared
+      - HERMES_CONTROL_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    networks:
+      - control-center
+
+networks:
+  control-center:
+    driver: bridge
