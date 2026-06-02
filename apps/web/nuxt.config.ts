@@ -1,8 +1,14 @@
+import tailwindcss from '@tailwindcss/vite'
+
 export default defineNuxtConfig({
   ssr: false,
+  compatibilityDate: '2026-06-02',
   devtools: { enabled: true },
   modules: ['@nuxtjs/google-fonts'],
   css: ['~/assets/css/main.css'],
+  vite: {
+    plugins: [tailwindcss()]
+  },
   app: {
     head: {
       title: 'Hermes Control Center',
