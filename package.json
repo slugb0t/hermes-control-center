@@ -3,16 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "description": "Mobile-friendly Mission Control dashboard for Hermes Agent.",
-  "packageManager": "npm@10.9.8",
+  "packageManager": "yarn@1.22.22",
   "workspaces": [
     "apps/web"
   ],
   "scripts": {
-    "dev:web": "npm --workspace apps/web run dev",
-    "build:web": "npm --workspace apps/web run build",
-    "generate:web": "npm --workspace apps/web run generate",
-    "preview:web": "npm --workspace apps/web run preview",
+    "dev:web": "yarn --cwd apps/web dev",
+    "build:web": "yarn --cwd apps/web build",
+    "generate:web": "yarn --cwd apps/web generate",
+    "preview:web": "yarn --cwd apps/web preview",
     "test:api": "cd apps/api && python -m pytest -q",
-    "test": "npm run build:web && npm run test:api"
+    "test": "yarn build:web && yarn test:api"
   }
 }

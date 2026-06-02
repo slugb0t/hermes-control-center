@@ -24,8 +24,8 @@ docs/    Architecture, security, and roadmap notes
 ### Web
 
 ```bash
-npm install
-npm run dev:web
+yarn install
+yarn dev:web
 ```
 
 The Nuxt dev server defaults to `http://localhost:3000`.
@@ -43,7 +43,7 @@ uvicorn app.main:app --reload --port 8787
 ### Build / test
 
 ```bash
-npm run build:web
+yarn build:web
 cd apps/api && python -m pytest -q
 ```
 
