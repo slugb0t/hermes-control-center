@@ -1,19 +1,50 @@
 <script setup lang="ts">
 const runtimeConfig = useRuntimeConfig()
+const apiBase = runtimeConfig.public.apiBase as string
 
-const cards = [
-  { label: 'Active sessions', value: '—', hint: 'Waiting for Hermes session adapter' },
-  { label: 'Pending approvals', value: '—', hint: 'Approval bridge coming next' },
-  { label: 'KB roots', value: '2', hint: 'kb-private and kb-shared' }
-]
+interface SystemStatus {
+  hermes_connected: boolean
+  live_updates: string
+  allowed_roots: string[]
+  state_db: string | null
+  session_count: number
+  active_session_count: number
+  latest_activity_at: string | null
+}
 
-const activity = [
-  { title: 'Control Center scaffold initialized', time: 'now', detail: 'Nuxt SPA/PWA shell is ready.' },
-  { title: 'Hermes integration planned', time: 'next', detail: 'Wire API to Hermes sessions, tools, approvals, and logs.' },
-  { title: 'Mobile home-screen ready', time: 'next', detail: 'PWA metadata included for iPhone Safari.' }
-]
+interface SessionSummary {
+  id: string
+  title: string
+  source: string
+  model: string | null
+  last_activity_at: string | null
+  message_count: number
+  tool_call_count: number
+  preview: string
+}
+
+interface MessageSummary {
+  id: number
+  session_id: string
+  role: string
+  tool_name: string | null
+  timestamp: string | null
+  content: string
+}
+
+const { data: status } = await useAsyncData<SystemStatus>('dashboard-status', () => $fetch(`${apiBase}/status`))
+const { data: sessions } = await useAsyncData<SessionSummary[]>('dashboard-sessions', () => $fetch(`${apiBase}/sessions?limit=3`), { default: () => [] })
+const { data: activity } = await useAsyncData<MessageSummary[]>('dashboard-activity', () => $fetch(`${apiBase}/activity?limit=5`), { default: () => [] })
 
 const cardClass = 'rounded-[1.35rem] border border-white/10 bg-zinc-900/80 p-4 shadow-[0_18px_80px_rgba(0,0,0,0.24)] backdrop-blur-xl'
+
+const metrics = computed(() => [
+  { label: 'Hermes connected', value: status.value?.hermes_connected ? 'Yes' : 'No', hint: status.value?.state_db || 'State database not available' },
+  { label: 'Sessions', value: status.value?.session_count?.toString() ?? '—', hint: `${status.value?.active_session_count ?? 0} active/open sessions` },
+  { label: 'KB roots', value: status.value?.allowed_roots?.length?.toString() ?? '—', hint: status.value?.allowed_roots?.join(', ') || 'No roots configured' }
+])
+
+const formatTime = (value: string | null) => value ? new Date(value).toLocaleString() : 'unknown'
 </script>
 
 <template>
@@ -25,53 +56,64 @@ const cardClass = 'rounded-[1.35rem] border border-white/10 bg-zinc-900/80 p-4 s
           Hermes, from anywhere.
         </h1>
         <p class="max-w-3xl leading-relaxed text-zinc-400">
-          A lightweight, mobile-friendly command center for watching sessions, approving actions,
-          editing your KB, and keeping your calendar in flow.
+          Live read-only preview of the Hermes VPS state: sessions, recent activity, active counts, and configured KB roots.
         </p>
       </div>
-      <span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-200">
-        <span class="size-2 rounded-full bg-emerald-400 shadow-[0_0_18px_#34d399]" /> UI online
+      <span
+        class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-bold"
+        :class="status?.hermes_connected ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-rose-400/30 bg-rose-400/10 text-rose-200'"
+      >
+        <span class="size-2 rounded-full" :class="status?.hermes_connected ? 'bg-emerald-400 shadow-[0_0_18px_#34d399]' : 'bg-rose-400'" />
+        {{ status?.hermes_connected ? 'Hermes connected' : 'Hermes offline' }}
       </span>
     </header>
 
     <div class="grid grid-cols-12 gap-4 max-md:grid-cols-1">
-      <article v-for="card in cards" :key="card.label" :class="[cardClass, 'col-span-4 max-md:col-span-1']">
+      <article v-for="card in metrics" :key="card.label" :class="[cardClass, 'col-span-4 max-md:col-span-1']">
         <div class="flex items-baseline justify-between gap-4">
           <span>{{ card.label }}</span>
           <strong class="text-3xl">{{ card.value }}</strong>
         </div>
-        <p class="mt-2 leading-relaxed text-zinc-400">{{ card.hint }}</p>
+        <p class="mt-2 break-words leading-relaxed text-zinc-400">{{ card.hint }}</p>
       </article>
 
-      <article :class="[cardClass, 'col-span-8 max-md:col-span-1']">
-        <h2 class="mb-4 text-base font-bold">Live activity</h2>
+      <article :class="[cardClass, 'col-span-7 max-md:col-span-1']">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-base font-bold">Recent sessions</h2>
+          <NuxtLink class="text-sm font-bold text-cyan-300" to="/sessions">View all</NuxtLink>
+        </div>
         <ul class="grid gap-3">
-          <li v-for="item in activity" :key="item.title" class="flex justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
-            <div>
-              <strong>{{ item.title }}</strong>
-              <p class="mt-1 leading-relaxed text-zinc-400">{{ item.detail }}</p>
-            </div>
-            <small class="text-zinc-400">{{ item.time }}</small>
+          <li v-for="session in sessions" :key="session.id" class="rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
+            <NuxtLink :to="`/sessions/${session.id}`" class="block">
+              <div class="flex items-start justify-between gap-3 max-sm:block">
+                <strong>{{ session.title }}</strong>
+                <small class="text-zinc-400">{{ formatTime(session.last_activity_at) }}</small>
+              </div>
+              <p class="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-400">{{ session.preview }}</p>
+              <p class="mt-2 text-xs uppercase tracking-[0.12em] text-zinc-500">
+                {{ session.source }} · {{ session.message_count }} messages · {{ session.tool_call_count }} tools
+              </p>
+            </NuxtLink>
           </li>
         </ul>
       </article>
 
-      <article :class="[cardClass, 'col-span-4 max-md:col-span-1']">
-        <h2 class="mb-2 text-base font-bold">Quick actions</h2>
-        <p class="leading-relaxed text-zinc-400">These become real controls after the Hermes Control API is connected.</p>
-        <div class="mt-4 flex flex-wrap gap-2.5">
-          <NuxtLink class="rounded-2xl bg-linear-to-br from-violet-500 to-indigo-500 px-3.5 py-3 font-bold text-white" to="/approvals">
-            Review approvals
-          </NuxtLink>
-          <NuxtLink class="rounded-2xl border border-white/10 bg-zinc-800/95 px-3.5 py-3 font-bold" to="/kb">
-            Open KB
-          </NuxtLink>
-        </div>
+      <article :class="[cardClass, 'col-span-5 max-md:col-span-1']">
+        <h2 class="mb-4 text-base font-bold">Recent activity</h2>
+        <ul class="grid gap-3">
+          <li v-for="item in activity" :key="item.id" class="rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <span class="text-xs font-bold uppercase tracking-[0.12em] text-cyan-300">{{ item.tool_name || item.role }}</span>
+              <small class="text-zinc-500">{{ formatTime(item.timestamp) }}</small>
+            </div>
+            <p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300">{{ item.content }}</p>
+          </li>
+        </ul>
       </article>
 
       <article :class="[cardClass, 'col-span-12 max-md:col-span-1']">
         <h2 class="mb-2 text-base font-bold">API target</h2>
-        <p class="leading-relaxed text-zinc-400"><code>{{ runtimeConfig.public.apiBase }}</code></p>
+        <p class="break-words leading-relaxed text-zinc-400"><code>{{ apiBase }}</code></p>
       </article>
     </div>
   </section>
