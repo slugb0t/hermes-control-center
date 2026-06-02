@@ -23,7 +23,10 @@ docs/    Architecture, security, and roadmap notes
 
 ### Web
 
+Use Node 24 LTS with Corepack/Yarn:
+
 ```bash
+corepack enable
 yarn install
 yarn dev:web
 ```

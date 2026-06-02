@@ -8,11 +8,15 @@
     "apps/web"
   ],
   "scripts": {
+    "postinstall": "yarn --cwd apps/web nuxt prepare",
     "dev:web": "yarn --cwd apps/web dev",
     "build:web": "yarn --cwd apps/web build",
     "generate:web": "yarn --cwd apps/web generate",
     "preview:web": "yarn --cwd apps/web preview",
     "test:api": "cd apps/api && python -m pytest -q",
     "test": "yarn build:web && yarn test:api"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }
