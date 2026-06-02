@@ -8,11 +8,11 @@
     "apps/web"
   ],
   "scripts": {
-    "postinstall": "yarn --cwd apps/web nuxt prepare",
-    "dev:web": "yarn --cwd apps/web dev",
-    "build:web": "yarn --cwd apps/web build",
-    "generate:web": "yarn --cwd apps/web generate",
-    "preview:web": "yarn --cwd apps/web preview",
+    "postinstall": "node scripts/nuxt-cli.mjs prepare",
+    "dev:web": "node scripts/nuxt-cli.mjs dev",
+    "build:web": "node scripts/nuxt-cli.mjs build",
+    "generate:web": "node scripts/nuxt-cli.mjs generate",
+    "preview:web": "node scripts/nuxt-cli.mjs preview",
     "test:api": "cd apps/api && python -m pytest -q",
     "test": "yarn build:web && yarn test:api"
   },
