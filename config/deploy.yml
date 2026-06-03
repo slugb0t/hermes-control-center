@@ -1,0 +1,60 @@
+service: hermes-control-center
+image: slugb0t/hermes-control-center
+
+servers:
+  web:
+    hosts:
+      - 138.68.234.137
+    options:
+      add-host:
+        - host.docker.internal:host-gateway
+
+ssh:
+  user: root
+
+registry:
+  server: ghcr.io
+  username: slugb0t
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  dockerfile: Dockerfile
+  cache:
+    type: gha
+
+proxy:
+  host: slugb0t.work
+  app_port: 3000
+  ssl: true
+  healthcheck:
+    path: /api/health
+    interval: 2
+    timeout: 2
+
+volumes:
+  - /root/.hermes/state.db:/root/.hermes/state.db:ro
+  - /srv/syncthing/kb-private:/srv/syncthing/kb-private:ro
+  - /srv/syncthing/kb-shared:/srv/syncthing/kb-shared:ro
+
+env:
+  clear:
+    NODE_ENV: production
+    HOST: 0.0.0.0
+    PORT: 3000
+    NITRO_HOST: 0.0.0.0
+    NITRO_PORT: 3000
+    NUXT_PUBLIC_API_BASE: /api
+    NUXT_API_INTERNAL_BASE: http://127.0.0.1:8787
+    HERMES_STATE_DB: /root/.hermes/state.db
+    HERMES_CONTROL_ALLOWED_ROOTS: /srv/syncthing/kb-private:/srv/syncthing/kb-shared
+    HERMES_CONTROL_CORS_ORIGINS: https://slugb0t.work
+    CONTROL_CENTER_REQUIRE_AUTH: "true"
+    CONTROL_CENTER_BASIC_AUTH_USER: slugb0t
+  secret:
+    - CONTROL_CENTER_BASIC_AUTH_PASSWORD
+
+retain_containers: 3
+deploy_timeout: 30
+drain_timeout: 10
