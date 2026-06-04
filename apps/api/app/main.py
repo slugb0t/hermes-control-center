@@ -40,6 +40,7 @@ class SessionSummary(BaseModel):
     title: str
     source: str
     model: str | None
+    status: str
     started_at: str | None
     last_activity_at: str | None
     message_count: int
@@ -119,6 +120,17 @@ def connect_state_db(settings: Settings) -> sqlite3.Connection:
     return conn
 
 
+def session_status_from_row(row: sqlite3.Row) -> str:
+    end_reason = (row["end_reason"] if "end_reason" in row.keys() else None) or ""
+    ended_at = row["ended_at"] if "ended_at" in row.keys() else None
+    tool_call_count = row["tool_call_count"] if "tool_call_count" in row.keys() else 0
+    if re.search(r"error|fail|exception", str(end_reason), re.IGNORECASE):
+        return "failed"
+    if ended_at is None:
+        return "running" if (tool_call_count or 0) > 0 else "idle"
+    return "idle"
+
+
 def session_summary_from_row(row: sqlite3.Row) -> SessionSummary:
     title = row["title"] or "Untitled session"
     preview = compact(row["preview"], 260)
@@ -127,6 +139,7 @@ def session_summary_from_row(row: sqlite3.Row) -> SessionSummary:
         title=title,
         source=row["source"],
         model=row["model"],
+        status=session_status_from_row(row),
         started_at=iso_timestamp(row["started_at"]),
         last_activity_at=iso_timestamp(row["last_activity_at"] or row["started_at"]),
         message_count=row["message_count"] or 0,
@@ -276,6 +289,8 @@ def create_app() -> FastAPI:
                   s.source,
                   s.model,
                   s.started_at,
+                  s.ended_at,
+                  s.end_reason,
                   s.message_count,
                   s.tool_call_count,
                   max(m.timestamp) as last_activity_at,
@@ -318,6 +333,8 @@ def create_app() -> FastAPI:
                   s.source,
                   s.model,
                   s.started_at,
+                  s.ended_at,
+                  s.end_reason,
                   s.message_count,
                   s.tool_call_count,
                   max(m.timestamp) as last_activity_at,

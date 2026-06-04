@@ -34,7 +34,7 @@ def test_status_endpoint_exposes_allowed_roots_and_missing_db(monkeypatch, tmp_p
     }
 
 
-def test_sessions_endpoint_returns_recent_sessions(monkeypatch, tmp_path):
+def test_sessions_endpoint_returns_recent_sessions_with_status(monkeypatch, tmp_path):
     db_path = tmp_path / "state.db"
     seed_state_db(db_path)
     monkeypatch.setenv("HERMES_STATE_DB", str(db_path))
@@ -47,6 +47,8 @@ def test_sessions_endpoint_returns_recent_sessions(monkeypatch, tmp_path):
     assert sessions[0]["id"] == "session-1"
     assert sessions[0]["title"] == "Dashboard preview"
     assert sessions[0]["preview"] == "Latest assistant response"
+    assert sessions[0]["status"] == "running"
+    assert sessions[1]["status"] == "idle"
 
 
 def test_sessions_endpoint_filters_and_sorts_sessions(monkeypatch, tmp_path):
@@ -170,8 +172,8 @@ def seed_state_db(path: Path) -> None:
         ("session-1", "discord", "gpt-5.5", 100.0, 3, 1, "Dashboard preview"),
     )
     conn.execute(
-        "insert into sessions (id, source, model, started_at, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?)",
-        ("session-2", "local", "gpt-5.5", 50.0, 1, 0, "Older local session"),
+        "insert into sessions (id, source, model, started_at, ended_at, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("session-2", "local", "gpt-5.5", 50.0, 60.0, 1, 0, "Older local session"),
     )
     conn.execute(
         "insert into messages (session_id, role, content, timestamp) values (?, ?, ?, ?)",

@@ -7,7 +7,9 @@ Nuxt SPA/PWA frontend
         ↓ authenticated HTTP + SSE/WebSocket
 Hermes Control API
         ↓ controlled adapters
-Hermes Agent state, logs, approvals, KB folders, calendar tools
+Hermes API server / gateway adapter
+        ↓
+Hermes Agent sessions, state, logs, approvals, KB folders, calendar tools
 ```
 
 ## Frontend
@@ -21,7 +23,8 @@ Hermes Agent state, logs, approvals, KB folders, calendar tools
 
 - FastAPI scaffold for the control plane.
 - Owns authentication, authorization, file-root allowlists, approval checks, and audit logging.
-- Intended to integrate with Hermes APIs/state rather than directly bypassing Hermes safety flows.
+- Intended to integrate with Hermes API server/gateway adapter rather than directly bypassing Hermes safety flows.
+- Web session continuation should go through Hermes gateway semantics, not a read-only state database shortcut.
 
 ## Real-time updates
 
