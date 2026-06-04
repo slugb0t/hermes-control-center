@@ -65,28 +65,10 @@ const availableRoles = computed(() => {
   ].filter((item) => !item.hidden)
 })
 const latestMessage = computed(() => messages.value.at(-1))
-
-const statusLabel = computed(() => {
-  const status = session.value?.status || 'idle'
-  if (status === 'running') return 'Running'
-  if (status === 'waiting') return 'Waiting for approval'
-  if (status === 'failed') return 'Failed'
-  return 'Idle'
-})
-const statusClass = computed(() => {
-  const status = session.value?.status || 'idle'
-  if (status === 'running') return 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100'
-  if (status === 'waiting') return 'border-amber-300/25 bg-amber-300/10 text-amber-100'
-  if (status === 'failed') return 'border-rose-300/25 bg-rose-300/10 text-rose-100'
-  return 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
-})
-const statusDotClass = computed(() => {
-  const status = session.value?.status || 'idle'
-  if (status === 'running') return 'bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.75)]'
-  if (status === 'waiting') return 'bg-amber-300 shadow-[0_0_18px_rgba(252,211,77,0.75)]'
-  if (status === 'failed') return 'bg-rose-300 shadow-[0_0_18px_rgba(253,164,175,0.75)]'
-  return 'bg-emerald-300'
-})
+const statusMeta = computed(() => getSessionStatusMeta(session.value?.status))
+const statusLabel = computed(() => statusMeta.value.label)
+const statusClass = computed(() => statusMeta.value.badgeClass)
+const statusDotClass = computed(() => statusMeta.value.dotClass)
 
 const hasExpandableContent = (message: MessageSummary) => message.content_truncated || message.content.length > previewLength
 const isExpanded = (message: MessageSummary) => expandedMessages.value.has(message.id)
@@ -151,6 +133,8 @@ const parseToolCalls = (message: MessageSummary): ToolCallPreview[] => {
     return [{ name: message.tool_name || 'tool', arguments: message.tool_calls }]
   }
 }
+const toolCallsByMessageId = computed(() => new Map(messages.value.map((message) => [message.id, parseToolCalls(message)])))
+const toolCallsFor = (message: MessageSummary) => toolCallsByMessageId.value.get(message.id) || []
 const roleClass = (role: string) => {
   if (role === 'user') return 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100'
   if (role === 'tool') return 'border-amber-300/20 bg-amber-300/10 text-amber-100'
@@ -162,12 +146,16 @@ const messageShellClass = (role: string) => {
   return 'border-white/10 bg-zinc-900/80'
 }
 const copyText = async (key: string, text: string) => {
-  if (!text || !import.meta.client) return
-  await navigator.clipboard.writeText(text)
-  copiedKey.value = key
-  window.setTimeout(() => {
-    if (copiedKey.value === key) copiedKey.value = null
-  }, 1600)
+  if (!text || !import.meta.client || !navigator.clipboard?.writeText) return
+  try {
+    await navigator.clipboard.writeText(text)
+    copiedKey.value = key
+    window.setTimeout(() => {
+      if (copiedKey.value === key) copiedKey.value = null
+    }, 1600)
+  } catch {
+    // Clipboard writes can fail on HTTP origins, older browsers, or denied permissions.
+  }
 }
 const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
 </script>
@@ -252,13 +240,13 @@ const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smoot
           <small class="text-zinc-500 max-sm:mt-2 max-sm:block">{{ formatTime(message.timestamp) }}</small>
         </div>
 
-        <div v-if="parseToolCalls(message).length" class="mb-3 rounded-2xl border border-amber-300/15 bg-black/25 p-3">
+        <div v-if="toolCallsFor(message).length" class="mb-3 rounded-2xl border border-amber-300/15 bg-black/25 p-3">
           <button class="flex w-full items-center justify-between gap-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-amber-100" type="button" @click="toggleTool(message)">
-            <span>{{ parseToolCalls(message).length }} tool call{{ parseToolCalls(message).length === 1 ? '' : 's' }}</span>
+            <span>{{ toolCallsFor(message).length }} tool call{{ toolCallsFor(message).length === 1 ? '' : 's' }}</span>
             <span>{{ isToolExpanded(message) ? 'Collapse' : 'Expand' }}</span>
           </button>
           <div v-if="isToolExpanded(message)" class="mt-3 grid gap-3">
-            <div v-for="(call, callIndex) in parseToolCalls(message)" :key="`${message.id}-${callIndex}`" class="rounded-xl border border-white/10 bg-black/25 p-3">
+            <div v-for="(call, callIndex) in toolCallsFor(message)" :key="`${message.id}-${callIndex}`" class="rounded-xl border border-white/10 bg-black/25 p-3">
               <div class="mb-2 flex items-center justify-between gap-3">
                 <strong class="text-sm text-amber-100">{{ call.name }}</strong>
                 <button class="rounded-full border border-white/10 px-2 py-1 text-[0.68rem] font-bold text-zinc-400 hover:text-zinc-100" type="button" @click="copyText(`tool-${message.id}-${callIndex}`, call.arguments)">

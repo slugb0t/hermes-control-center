@@ -243,46 +243,22 @@ def create_app() -> FastAPI:
     ) -> list[SessionSummary]:
         settings = load_settings()
         limit = max(1, min(limit, 100))
-        where_clauses = []
-        params: list[str | int] = []
-        if source and source != "all":
-            where_clauses.append("s.source = ?")
-            params.append(source)
-        if model and model != "all":
-            where_clauses.append("coalesce(s.model, 'unknown model') = ?")
-            params.append(model)
-        if tools == "with-tools":
-            where_clauses.append("coalesce(s.tool_call_count, 0) > 0")
-        elif tools == "no-tools":
-            where_clauses.append("coalesce(s.tool_call_count, 0) = 0")
-        if query:
-            where_clauses.append(
-                """
-                (
-                  s.id like ?
-                  or coalesce(s.title, '') like ?
-                  or exists (
-                    select 1 from messages qm
-                    where qm.session_id = s.id
-                      and qm.role in ('user', 'assistant', 'tool')
-                      and coalesce(qm.content, '') like ?
-                  )
-                )
-                """
-            )
-            like_query = f"%{query}%"
-            params.extend([like_query, like_query, like_query])
-        where_sql = f"where {' and '.join(where_clauses)}" if where_clauses else ""
-        order_sql = {
-            "recent": "order by coalesce(last_activity_at, s.started_at) desc",
-            "newest": "order by s.started_at desc",
-            "oldest": "order by s.started_at asc",
-            "most-messages": "order by coalesce(s.message_count, 0) desc, coalesce(last_activity_at, s.started_at) desc",
-            "most-tools": "order by coalesce(s.tool_call_count, 0) desc, coalesce(last_activity_at, s.started_at) desc",
-        }.get(sort, "order by coalesce(last_activity_at, s.started_at) desc")
+        source_filter = None if not source or source == "all" else source
+        model_filter = None if not model or model == "all" else model
+        tools_filter = tools if tools in {"with-tools", "no-tools"} else "all"
+        sort_filter = sort if sort in {"recent", "newest", "oldest", "most-messages", "most-tools"} else "recent"
+        like_query = f"%{query}%" if query else None
+        params: dict[str, str | int | None] = {
+            "source": source_filter,
+            "model": model_filter,
+            "tools": tools_filter,
+            "sort": sort_filter,
+            "query": like_query,
+            "limit": limit,
+        }
         with connect_state_db(settings) as conn:
             rows = conn.execute(
-                f"""
+                """
                 select
                   s.id,
                   s.title,
@@ -303,12 +279,31 @@ def create_app() -> FastAPI:
                   ) as preview
                 from sessions s
                 left join messages m on m.session_id = s.id
-                {where_sql}
+                where (:source is null or s.source = :source)
+                  and (:model is null or coalesce(s.model, 'unknown model') = :model)
+                  and (:tools != 'with-tools' or coalesce(s.tool_call_count, 0) > 0)
+                  and (:tools != 'no-tools' or coalesce(s.tool_call_count, 0) = 0)
+                  and (
+                    :query is null
+                    or s.id like :query
+                    or coalesce(s.title, '') like :query
+                    or exists (
+                      select 1 from messages qm
+                      where qm.session_id = s.id
+                        and qm.role in ('user', 'assistant', 'tool')
+                        and coalesce(qm.content, '') like :query
+                    )
+                  )
                 group by s.id
-                {order_sql}
-                limit ?
+                order by
+                  case when :sort = 'oldest' then s.started_at end asc,
+                  case when :sort = 'newest' then s.started_at end desc,
+                  case when :sort = 'most-messages' then coalesce(s.message_count, 0) end desc,
+                  case when :sort = 'most-tools' then coalesce(s.tool_call_count, 0) end desc,
+                  coalesce(last_activity_at, s.started_at) desc
+                limit :limit
                 """,
-                (*params, limit),
+                params,
             ).fetchall()
         return [session_summary_from_row(row) for row in rows]
 
