@@ -23,6 +23,7 @@ jobs:
 
     env:
       KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      KAMAL_HOST: ${{ secrets.KAMAL_HOST }}
       CONTROL_CENTER_AUTH_PASSWORD: ${{ secrets.CONTROL_CENTER_AUTH_PASSWORD }}
       NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
 

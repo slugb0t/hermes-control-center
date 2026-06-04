@@ -4,7 +4,7 @@ image: slugb0t/hermes-control-center
 servers:
   web:
     hosts:
-      - 138.68.234.137
+      - <%= ENV.fetch("KAMAL_HOST") %>
     options:
       add-host:
         - host.docker.internal:host-gateway
