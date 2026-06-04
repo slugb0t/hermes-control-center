@@ -45,6 +45,17 @@ const toggleMessage = (message: MessageSummary) => {
   else next.add(message.id)
   expandedMessages.value = next
 }
+const tryFormatStructuredContent = (content: string) => {
+  const trimmed = content.trim()
+  if (!trimmed || !['{', '['].includes(trimmed[0] || '')) return content
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2)
+  } catch {
+    return content
+  }
+}
+const isStructuredContent = (message: MessageSummary) => message.role === 'tool' || /^[\s]*[\[{]/.test(message.content)
+const formattedContent = (message: MessageSummary) => tryFormatStructuredContent(visibleContent(message))
 const roleClass = (role: string) => {
   if (role === 'user') return 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100'
   if (role === 'tool') return 'border-amber-300/20 bg-amber-300/10 text-amber-100'
@@ -85,7 +96,11 @@ const roleClass = (role: string) => {
           <small class="text-zinc-500 max-sm:mt-2 max-sm:block">{{ formatTime(message.timestamp) }}</small>
         </div>
         <div class="space-y-3">
-          <p v-if="message.content" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6">{{ visibleContent(message) }}</p>
+          <pre
+            v-if="message.content && isStructuredContent(message)"
+            class="overflow-x-auto rounded-2xl border border-white/10 bg-black/35 p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:normal] [white-space:pre-wrap] max-sm:text-[0.68rem]"
+          ><code>{{ formattedContent(message) }}</code></pre>
+          <p v-else-if="message.content" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6">{{ visibleContent(message) }}</p>
           <p v-else class="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2 text-sm italic text-zinc-500">No visible assistant text was recorded for this message.</p>
           <button
             v-if="hasExpandableContent(message)"

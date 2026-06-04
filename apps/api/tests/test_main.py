@@ -49,6 +49,33 @@ def test_sessions_endpoint_returns_recent_sessions(monkeypatch, tmp_path):
     assert sessions[0]["preview"] == "Latest assistant response"
 
 
+def test_sessions_endpoint_filters_and_sorts_sessions(monkeypatch, tmp_path):
+    db_path = tmp_path / "state.db"
+    seed_state_db(db_path)
+    monkeypatch.setenv("HERMES_STATE_DB", str(db_path))
+    client = TestClient(create_app())
+
+    oldest_response = client.get("/sessions?sort=oldest&tools=no-tools")
+    assert oldest_response.status_code == 200
+    assert [session["id"] for session in oldest_response.json()] == ["session-2"]
+
+    query_response = client.get("/sessions?query=assistant&sort=most-messages")
+    assert query_response.status_code == 200
+    assert query_response.json()[0]["id"] == "session-1"
+
+
+def test_session_filters_endpoint_returns_available_sources_and_models(monkeypatch, tmp_path):
+    db_path = tmp_path / "state.db"
+    seed_state_db(db_path)
+    monkeypatch.setenv("HERMES_STATE_DB", str(db_path))
+    client = TestClient(create_app())
+
+    response = client.get("/sessions/filters")
+
+    assert response.status_code == 200
+    assert response.json() == {"sources": ["discord", "local"], "models": ["gpt-5.5"]}
+
+
 def test_session_detail_redacts_secret_tokens(monkeypatch, tmp_path):
     db_path = tmp_path / "state.db"
     seed_state_db(db_path)
@@ -140,7 +167,11 @@ def seed_state_db(path: Path) -> None:
     )
     conn.execute(
         "insert into sessions (id, source, model, started_at, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?)",
-        ("session-1", "discord", "gpt-5.5", 100.0, 2, 1, "Dashboard preview"),
+        ("session-1", "discord", "gpt-5.5", 100.0, 3, 1, "Dashboard preview"),
+    )
+    conn.execute(
+        "insert into sessions (id, source, model, started_at, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?)",
+        ("session-2", "local", "gpt-5.5", 50.0, 1, 0, "Older local session"),
     )
     conn.execute(
         "insert into messages (session_id, role, content, timestamp) values (?, ?, ?, ?)",

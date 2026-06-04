@@ -62,6 +62,11 @@ class SessionDetail(SessionSummary):
     messages: list[MessageSummary]
 
 
+class SessionFilters(BaseModel):
+    sources: list[str]
+    models: list[str]
+
+
 class ApprovalSummary(BaseModel):
     id: str
     status: str
@@ -215,12 +220,56 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/sessions", response_model=list[SessionSummary])
-    def sessions(limit: int = 12) -> list[SessionSummary]:
+    def sessions(
+        limit: int = 12,
+        sort: str = "recent",
+        source: str | None = None,
+        model: str | None = None,
+        tools: str = "all",
+        query: str | None = None,
+    ) -> list[SessionSummary]:
         settings = load_settings()
-        limit = max(1, min(limit, 50))
+        limit = max(1, min(limit, 100))
+        where_clauses = []
+        params: list[str | int] = []
+        if source and source != "all":
+            where_clauses.append("s.source = ?")
+            params.append(source)
+        if model and model != "all":
+            where_clauses.append("coalesce(s.model, 'unknown model') = ?")
+            params.append(model)
+        if tools == "with-tools":
+            where_clauses.append("coalesce(s.tool_call_count, 0) > 0")
+        elif tools == "no-tools":
+            where_clauses.append("coalesce(s.tool_call_count, 0) = 0")
+        if query:
+            where_clauses.append(
+                """
+                (
+                  s.id like ?
+                  or coalesce(s.title, '') like ?
+                  or exists (
+                    select 1 from messages qm
+                    where qm.session_id = s.id
+                      and qm.role in ('user', 'assistant', 'tool')
+                      and coalesce(qm.content, '') like ?
+                  )
+                )
+                """
+            )
+            like_query = f"%{query}%"
+            params.extend([like_query, like_query, like_query])
+        where_sql = f"where {' and '.join(where_clauses)}" if where_clauses else ""
+        order_sql = {
+            "recent": "order by coalesce(last_activity_at, s.started_at) desc",
+            "newest": "order by s.started_at desc",
+            "oldest": "order by s.started_at asc",
+            "most-messages": "order by coalesce(s.message_count, 0) desc, coalesce(last_activity_at, s.started_at) desc",
+            "most-tools": "order by coalesce(s.tool_call_count, 0) desc, coalesce(last_activity_at, s.started_at) desc",
+        }.get(sort, "order by coalesce(last_activity_at, s.started_at) desc")
         with connect_state_db(settings) as conn:
             rows = conn.execute(
-                """
+                f"""
                 select
                   s.id,
                   s.title,
@@ -239,13 +288,22 @@ def create_app() -> FastAPI:
                   ) as preview
                 from sessions s
                 left join messages m on m.session_id = s.id
+                {where_sql}
                 group by s.id
-                order by coalesce(last_activity_at, s.started_at) desc
+                {order_sql}
                 limit ?
                 """,
-                (limit,),
+                (*params, limit),
             ).fetchall()
         return [session_summary_from_row(row) for row in rows]
+
+    @app.get("/sessions/filters", response_model=SessionFilters)
+    def session_filters() -> SessionFilters:
+        settings = load_settings()
+        with connect_state_db(settings) as conn:
+            sources = [row[0] for row in conn.execute("select distinct source from sessions where source is not null and source != '' order by source").fetchall()]
+            models = [row[0] for row in conn.execute("select distinct coalesce(model, 'unknown model') from sessions order by coalesce(model, 'unknown model')").fetchall()]
+        return SessionFilters(sources=sources, models=models)
 
     @app.get("/sessions/{session_id}", response_model=SessionDetail)
     def session_detail(session_id: str, message_limit: int = 30) -> SessionDetail:
