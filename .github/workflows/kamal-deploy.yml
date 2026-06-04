@@ -22,7 +22,8 @@ jobs:
 
     env:
       KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-      CONTROL_CENTER_BASIC_AUTH_PASSWORD: ${{ secrets.CONTROL_CENTER_BASIC_AUTH_PASSWORD }}
+      CONTROL_CENTER_AUTH_PASSWORD: ${{ secrets.CONTROL_CENTER_AUTH_PASSWORD }}
+      NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -42,7 +43,7 @@ jobs:
       - name: Trust deploy host
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H 138.68.234.137 >> ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.KAMAL_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
 
       - name: Deploy with Kamal
         run: bundle exec kamal deploy

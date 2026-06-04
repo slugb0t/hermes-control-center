@@ -24,6 +24,8 @@ WORKDIR /app
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-venv \
+  && groupadd --system appuser \
+  && useradd --system --gid appuser --home-dir /app --no-create-home --shell /usr/sbin/nologin appuser \
   && rm -rf /var/lib/apt/lists/*
 
 COPY apps/api/requirements.txt apps/api/requirements.txt
@@ -35,7 +37,10 @@ COPY apps/api/app apps/api/app
 COPY --from=web-build /app/apps/web/.output apps/web/.output
 COPY deploy/start-kamal.sh /usr/local/bin/start-kamal
 
-RUN chmod +x /usr/local/bin/start-kamal
+RUN chmod +x /usr/local/bin/start-kamal \
+  && chown -R appuser:appuser /app /opt/hermes-control-api
+
+USER appuser
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -44,9 +49,10 @@ ENV NODE_ENV=production \
     NITRO_PORT=3000 \
     NUXT_PUBLIC_API_BASE=/api \
     NUXT_API_INTERNAL_BASE=http://127.0.0.1:8787 \
-    HERMES_STATE_DB=/root/.hermes/state.db \
+    HERMES_STATE_DB=/var/lib/hermes/state.db \
     HERMES_CONTROL_ALLOWED_ROOTS=/srv/syncthing/kb-private:/srv/syncthing/kb-shared \
-    HERMES_CONTROL_CORS_ORIGINS=https://slugb0t.work
+    HERMES_CONTROL_CORS_ORIGINS=https://slugb0t.work \
+    CONTROL_CENTER_AUTH_USER=slugb0t
 
 EXPOSE 3000
 
