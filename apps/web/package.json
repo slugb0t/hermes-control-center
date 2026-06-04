@@ -12,10 +12,12 @@
   "dependencies": {
     "@nuxtjs/google-fonts": "latest",
     "nuxt": "^4.2.2",
+    "nuxt-auth-utils": "^0.5.29",
     "vue": "^3.5.24",
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@types/node": "^24.10.1",
     "typescript": "^5.9.3"
   }
 }

@@ -1,0 +1,49 @@
+name: Deploy with Kamal
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      CONTROL_CENTER_AUTH_PASSWORD: ${{ secrets.CONTROL_CENTER_AUTH_PASSWORD }}
+      NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
+
+      - name: Trust deploy host
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.KAMAL_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy with Kamal
+        run: bundle exec kamal deploy

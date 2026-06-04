@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   ssr: false,
   compatibilityDate: '2026-06-02',
   devtools: { enabled: true },
-  modules: ['@nuxtjs/google-fonts'],
+  modules: ['@nuxtjs/google-fonts', 'nuxt-auth-utils'],
   css: ['~/assets/css/main.css'],
   vite: {
     plugins: [tailwindcss()]

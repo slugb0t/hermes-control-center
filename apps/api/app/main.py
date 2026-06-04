@@ -106,7 +106,7 @@ def iso_timestamp(value: float | int | None) -> str | None:
 def connect_state_db(settings: Settings) -> sqlite3.Connection:
     if not settings.state_db.exists():
         raise HTTPException(status_code=503, detail=f"Hermes state database not found: {settings.state_db}")
-    conn = sqlite3.connect(f"file:{settings.state_db}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{settings.state_db}?mode=ro&immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 
