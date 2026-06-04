@@ -7,6 +7,7 @@ interface SessionSummary {
   title: string
   source: string
   model: string | null
+  status: string
   started_at: string | null
   last_activity_at: string | null
   message_count: number
@@ -55,6 +56,7 @@ const resetFilters = () => {
   tools.value = 'all'
   query.value = ''
 }
+const statusMeta = (status: string) => getSessionStatusMeta(status)
 </script>
 
 <template>
@@ -149,6 +151,7 @@ const resetFilters = () => {
           </div>
           <p class="mt-3 line-clamp-5 whitespace-pre-wrap break-words leading-relaxed text-zinc-300 max-sm:text-sm">{{ session.preview }}</p>
           <div class="mt-4 flex flex-wrap gap-2 text-sm text-zinc-400">
+            <span class="rounded-full border px-3 py-1 font-bold capitalize" :class="statusMeta(session.status).badgeClass">{{ statusMeta(session.status).label }}</span>
             <span class="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1">{{ session.message_count }} messages</span>
             <span class="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1">{{ session.tool_call_count }} tool calls</span>
             <span class="max-w-full truncate rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 max-sm:max-w-44">{{ session.id }}</span>

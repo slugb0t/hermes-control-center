@@ -34,7 +34,7 @@ def test_status_endpoint_exposes_allowed_roots_and_missing_db(monkeypatch, tmp_p
     }
 
 
-def test_sessions_endpoint_returns_recent_sessions(monkeypatch, tmp_path):
+def test_sessions_endpoint_returns_recent_sessions_with_status(monkeypatch, tmp_path):
     db_path = tmp_path / "state.db"
     seed_state_db(db_path)
     monkeypatch.setenv("HERMES_STATE_DB", str(db_path))
@@ -44,9 +44,14 @@ def test_sessions_endpoint_returns_recent_sessions(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     sessions = response.json()
+    sessions_by_id = {session["id"]: session for session in sessions}
     assert sessions[0]["id"] == "session-1"
     assert sessions[0]["title"] == "Dashboard preview"
     assert sessions[0]["preview"] == "Latest assistant response"
+    assert sessions_by_id["session-1"]["status"] == "running"
+    assert sessions_by_id["session-2"]["status"] == "idle"
+    assert sessions_by_id["session-3"]["status"] == "failed"
+    assert sessions_by_id["session-4"]["status"] == "idle"
 
 
 def test_sessions_endpoint_filters_and_sorts_sessions(monkeypatch, tmp_path):
@@ -57,7 +62,7 @@ def test_sessions_endpoint_filters_and_sorts_sessions(monkeypatch, tmp_path):
 
     oldest_response = client.get("/sessions?sort=oldest&tools=no-tools")
     assert oldest_response.status_code == 200
-    assert [session["id"] for session in oldest_response.json()] == ["session-2"]
+    assert [session["id"] for session in oldest_response.json()] == ["session-4", "session-3", "session-2"]
 
     query_response = client.get("/sessions?query=assistant&sort=most-messages")
     assert query_response.status_code == 200
@@ -170,8 +175,16 @@ def seed_state_db(path: Path) -> None:
         ("session-1", "discord", "gpt-5.5", 100.0, 3, 1, "Dashboard preview"),
     )
     conn.execute(
+        "insert into sessions (id, source, model, started_at, ended_at, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("session-2", "local", "gpt-5.5", 50.0, 60.0, 1, 0, "Older local session"),
+    )
+    conn.execute(
+        "insert into sessions (id, source, model, started_at, ended_at, end_reason, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("session-3", "local", "gpt-5.5", 40.0, 45.0, "Runtime Error", 1, 0, "Failed local session"),
+    )
+    conn.execute(
         "insert into sessions (id, source, model, started_at, message_count, tool_call_count, title) values (?, ?, ?, ?, ?, ?, ?)",
-        ("session-2", "local", "gpt-5.5", 50.0, 1, 0, "Older local session"),
+        ("session-4", "local", "gpt-5.5", 30.0, 1, 0, "Idle local session"),
     )
     conn.execute(
         "insert into messages (session_id, role, content, timestamp) values (?, ?, ?, ?)",
