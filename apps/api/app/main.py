@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
@@ -53,6 +54,8 @@ class MessageSummary(BaseModel):
     tool_name: str | None
     timestamp: str | None
     content: str
+    content_truncated: bool = False
+    tool_calls: str | None = None
 
 
 class SessionDetail(SessionSummary):
@@ -127,9 +130,35 @@ def session_summary_from_row(row: sqlite3.Row) -> SessionSummary:
     )
 
 
-def message_summary_from_row(row: sqlite3.Row, limit: int = 1200) -> MessageSummary:
+def summarize_tool_calls(raw_tool_calls: str | None) -> str:
+    if not raw_tool_calls:
+        return ""
+    try:
+        calls = json.loads(raw_tool_calls)
+    except json.JSONDecodeError:
+        return "Tool call metadata is available but could not be parsed."
+    summaries = []
+    for call in calls if isinstance(calls, list) else [calls]:
+        if not isinstance(call, dict):
+            continue
+        raw_function = call.get("function")
+        function = raw_function if isinstance(raw_function, dict) else {}
+        name = function.get("name") or call.get("name") or call.get("type") or "tool"
+        arguments = function.get("arguments") or call.get("arguments") or ""
+        if arguments:
+            summaries.append(f"Tool call requested: {name}\n{redact(str(arguments))}")
+        else:
+            summaries.append(f"Tool call requested: {name}")
+    return "\n\n".join(summaries)
+
+
+def message_summary_from_row(row: sqlite3.Row, limit: int | None = 1200) -> MessageSummary:
+    tool_calls = row["tool_calls"] if "tool_calls" in row.keys() else None
     content = redact(row["content"] or "")
-    if len(content) > limit:
+    if not content.strip() and tool_calls:
+        content = summarize_tool_calls(tool_calls)
+    content_truncated = limit is not None and len(content) > limit
+    if content_truncated and limit is not None:
         content = content[: limit - 1].rstrip() + "…"
     return MessageSummary(
         id=row["id"],
@@ -138,6 +167,8 @@ def message_summary_from_row(row: sqlite3.Row, limit: int = 1200) -> MessageSumm
         tool_name=row["tool_name"],
         timestamp=iso_timestamp(row["timestamp"]),
         content=content,
+        content_truncated=content_truncated,
+        tool_calls=redact(tool_calls) if tool_calls else None,
     )
 
 
@@ -202,7 +233,7 @@ def create_app() -> FastAPI:
                   (
                     select mm.content
                     from messages mm
-                    where mm.session_id = s.id and mm.role in ('user', 'assistant')
+                    where mm.session_id = s.id and mm.role in ('user', 'assistant') and coalesce(trim(mm.content), '') != ''
                     order by mm.timestamp desc
                     limit 1
                   ) as preview
@@ -235,7 +266,7 @@ def create_app() -> FastAPI:
                   (
                     select mm.content
                     from messages mm
-                    where mm.session_id = s.id and mm.role in ('user', 'assistant')
+                    where mm.session_id = s.id and mm.role in ('user', 'assistant') and coalesce(trim(mm.content), '') != ''
                     order by mm.timestamp desc
                     limit 1
                   ) as preview
@@ -250,7 +281,7 @@ def create_app() -> FastAPI:
                 raise HTTPException(status_code=404, detail="Session not found")
             message_rows = conn.execute(
                 """
-                select id, session_id, role, content, tool_name, timestamp
+                select id, session_id, role, content, tool_calls, tool_name, timestamp
                 from messages
                 where session_id = ? and role in ('user', 'assistant', 'tool')
                 order by timestamp desc
@@ -259,7 +290,7 @@ def create_app() -> FastAPI:
                 (session_id, message_limit),
             ).fetchall()
         summary = session_summary_from_row(row)
-        messages = [message_summary_from_row(message_row) for message_row in reversed(message_rows)]
+        messages = [message_summary_from_row(message_row, limit=None) for message_row in reversed(message_rows)]
         return SessionDetail(**summary.model_dump(), messages=messages)
 
     @app.get("/activity", response_model=list[MessageSummary])
@@ -269,7 +300,7 @@ def create_app() -> FastAPI:
         with connect_state_db(settings) as conn:
             rows = conn.execute(
                 """
-                select id, session_id, role, content, tool_name, timestamp
+                select id, session_id, role, content, tool_calls, tool_name, timestamp
                 from messages
                 where role in ('user', 'assistant', 'tool')
                 order by timestamp desc

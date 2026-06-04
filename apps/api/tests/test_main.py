@@ -60,6 +60,23 @@ def test_session_detail_redacts_secret_tokens(monkeypatch, tmp_path):
     assert response.status_code == 200
     payload = response.json()
     assert payload["messages"][0]["content"] == "Please use [REDACTED]"
+    assert payload["messages"][0]["content_truncated"] is False
+
+
+def test_session_detail_exposes_tool_call_summary_for_empty_assistant_messages(monkeypatch, tmp_path):
+    db_path = tmp_path / "state.db"
+    seed_state_db(db_path)
+    monkeypatch.setenv("HERMES_STATE_DB", str(db_path))
+    client = TestClient(create_app())
+
+    response = client.get("/sessions/session-1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    tool_call_message = payload["messages"][2]
+    assert tool_call_message["role"] == "assistant"
+    assert tool_call_message["content"].startswith("Tool call requested: terminal")
+    assert "yarn test" in tool_call_message["content"]
 
 
 def seed_state_db(path: Path) -> None:
@@ -132,6 +149,16 @@ def seed_state_db(path: Path) -> None:
     conn.execute(
         "insert into messages (session_id, role, content, timestamp) values (?, ?, ?, ?)",
         ("session-1", "assistant", "Latest assistant response", 102.0),
+    )
+    conn.execute(
+        "insert into messages (session_id, role, content, tool_calls, timestamp) values (?, ?, ?, ?, ?)",
+        (
+            "session-1",
+            "assistant",
+            "",
+            '[{"function":{"name":"terminal","arguments":"{\\"command\\":\\"yarn test\\"}"}}]',
+            103.0,
+        ),
     )
     conn.commit()
     conn.close()

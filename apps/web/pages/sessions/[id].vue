@@ -11,6 +11,8 @@ interface MessageSummary {
   tool_name: string | null
   timestamp: string | null
   content: string
+  content_truncated?: boolean
+  tool_calls?: string | null
 }
 
 interface SessionDetail {
@@ -29,6 +31,20 @@ interface SessionDetail {
 const { data: session } = await useAsyncData<SessionDetail>(`session-${sessionId}`, () => $fetch(`${apiBase}/sessions/${sessionId}?message_limit=40`))
 const formatTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : 'unknown'
 const shortSessionId = computed(() => session.value?.id ? `${session.value.id.slice(0, 8)}…` : '—')
+const expandedMessages = ref<Set<number>>(new Set())
+const previewLength = 1200
+const hasExpandableContent = (message: MessageSummary) => message.content_truncated || message.content.length > previewLength
+const isExpanded = (message: MessageSummary) => expandedMessages.value.has(message.id)
+const visibleContent = (message: MessageSummary) => {
+  if (!hasExpandableContent(message) || isExpanded(message)) return message.content
+  return `${message.content.slice(0, previewLength).trimEnd()}…`
+}
+const toggleMessage = (message: MessageSummary) => {
+  const next = new Set(expandedMessages.value)
+  if (next.has(message.id)) next.delete(message.id)
+  else next.add(message.id)
+  expandedMessages.value = next
+}
 const roleClass = (role: string) => {
   if (role === 'user') return 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100'
   if (role === 'tool') return 'border-amber-300/20 bg-amber-300/10 text-amber-100'
@@ -68,7 +84,18 @@ const roleClass = (role: string) => {
           </span>
           <small class="text-zinc-500 max-sm:mt-2 max-sm:block">{{ formatTime(message.timestamp) }}</small>
         </div>
-        <p class="max-h-[34rem] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6">{{ message.content }}</p>
+        <div class="space-y-3">
+          <p v-if="message.content" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6">{{ visibleContent(message) }}</p>
+          <p v-else class="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2 text-sm italic text-zinc-500">No visible assistant text was recorded for this message.</p>
+          <button
+            v-if="hasExpandableContent(message)"
+            type="button"
+            class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-zinc-200 transition hover:border-cyan-300/30 hover:text-cyan-100"
+            @click="toggleMessage(message)"
+          >
+            {{ isExpanded(message) ? 'Show less' : 'Show full message' }}
+          </button>
+        </div>
       </article>
     </div>
   </section>
