@@ -18,6 +18,7 @@ jobs:
   deploy:
     name: Deploy production
     runs-on: ubuntu-latest
+    environment: prd
     timeout-minutes: 30
 
     env:
