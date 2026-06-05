@@ -128,7 +128,7 @@ const renderMarkdown = (content: string) => {
 
   const flushParagraph = () => {
     if (!paragraph.length) return
-    html.push(`<p>${renderInlineMarkdown(paragraph.join(' '))}</p>`)
+    html.push(`<p>${renderInlineMarkdown(paragraph.join('\n'))}</p>`)
     paragraph = []
   }
   const flushList = () => {
@@ -159,7 +159,7 @@ const renderMarkdown = (content: string) => {
       continue
     }
     flushList()
-    paragraph.push(trimmed)
+    paragraph.push(line)
   }
   flushParagraph()
   flushList()
@@ -176,17 +176,17 @@ const markdownSegments = (message: MessageSummary): MarkdownSegment[] => {
   for (const match of content.matchAll(fencePattern)) {
     const index = match.index || 0
     if (index > cursor) {
-      const text = content.slice(cursor, index).trim()
+      const text = content.slice(cursor, index)
       segments.push({ type: 'text', text, html: renderMarkdown(text) })
     }
     segments.push({ type: 'code', language: match[1]?.trim() || 'text', text: match[2]?.trimEnd() || '' })
     cursor = index + match[0].length
   }
   if (cursor < content.length) {
-    const text = content.slice(cursor).trim()
+    const text = content.slice(cursor)
     segments.push({ type: 'text', text, html: renderMarkdown(text) })
   }
-  return segments.filter((segment) => segment.text)
+  return segments.filter((segment) => segment.type === 'code' ? segment.text : segment.text.trim())
 }
 
 const parseToolCalls = (message: MessageSummary): ToolCallPreview[] => {
@@ -218,9 +218,10 @@ const codeBlocksForToolCall = (call: ToolCallPreview): CodeBlockPreview[] => {
   const args = tryParseObject(call.arguments)
   if (!args) return [{ label: 'arguments', language: 'json', text: call.arguments || 'No arguments recorded.' }]
 
-  if (call.name === 'terminal' || 'command' in args) {
+  if (call.name === 'terminal') {
     const blocks: CodeBlockPreview[] = []
-    if (args.command) blocks.push({ label: 'command', language: 'bash', text: String(args.command) })
+    const command = args['command']
+    if (command) blocks.push({ label: 'command', language: 'bash', text: String(command) })
     const options = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'command'))
     if (Object.keys(options).length) blocks.push({ label: 'options', language: 'json', text: JSON.stringify(options, null, 2) })
     return blocks.length ? blocks : [{ label: 'arguments', language: 'json', text: JSON.stringify(args, null, 2) }]
@@ -228,7 +229,7 @@ const codeBlocksForToolCall = (call: ToolCallPreview): CodeBlockPreview[] => {
 
   return [{ label: 'arguments', language: 'json', text: JSON.stringify(args, null, 2) }]
 }
-const hasVisibleBody = (message: MessageSummary) => Boolean(message.content && !message.tool_calls)
+const hasVisibleBody = (message: MessageSummary) => Boolean(message.content)
 const roleClass = (role: string) => {
   if (role === 'user') return 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100'
   if (role === 'tool') return 'border-amber-300/20 bg-amber-300/10 text-amber-100'
@@ -376,7 +377,6 @@ const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-
             </div>
             <div v-else class="message-markdown text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6" v-html="segment.html || renderMarkdown(segment.text)" />
           </template>
-          <p v-if="!message.content && !message.tool_calls" class="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2 text-sm italic text-zinc-500">No visible text was recorded for this message.</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-if="message.content"
@@ -396,6 +396,7 @@ const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-
             </button>
           </div>
         </div>
+        <p v-else-if="!message.tool_calls" class="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2 text-sm italic text-zinc-500">No visible text was recorded for this message.</p>
       </article>
       <div ref="latestAnchor" aria-hidden="true" />
     </div>
