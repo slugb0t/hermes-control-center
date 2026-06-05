@@ -15,32 +15,55 @@ const navLinkActive = 'bg-violet-500/15 text-zinc-50'
 const bottomLinkBase = 'grid min-h-14 place-items-center gap-0.5 rounded-2xl text-lg text-zinc-400 transition'
 const bottomLinkActive = 'bg-violet-500/15 text-zinc-50'
 const isAuthRoute = computed(() => route.path === '/login')
+const isSidebarCollapsed = useState('sidebar-collapsed', () => false)
+const layoutClass = computed(() => {
+  if (isAuthRoute.value) return ''
+  return isSidebarCollapsed.value ? 'md:grid md:grid-cols-[5.75rem_minmax(0,1fr)]' : 'md:grid md:grid-cols-[17rem_minmax(0,1fr)]'
+})
+const desktopLinkBase = computed(() => [
+  navLinkBase,
+  isSidebarCollapsed.value && 'justify-center px-2.5'
+])
 </script>
 
 <template>
-  <div :class="['min-h-screen overflow-x-hidden', !isAuthRoute && 'md:grid md:grid-cols-[17rem_minmax(0,1fr)] max-md:pb-[calc(7rem+env(safe-area-inset-bottom))]']">
+  <div :class="['min-h-screen overflow-x-hidden', layoutClass, !isAuthRoute && 'max-md:pb-[calc(7rem+env(safe-area-inset-bottom))]']">
     <aside
       v-if="!isAuthRoute"
-      class="sticky top-0 hidden h-screen border-r border-white/10 bg-[#050507]/70 p-5 backdrop-blur-2xl md:block"
+      :class="[
+        'sticky top-0 hidden h-dvh overflow-hidden border-r border-white/10 bg-[#050507]/70 p-5 backdrop-blur-2xl md:block',
+        isSidebarCollapsed && 'p-3'
+      ]"
       aria-label="Primary navigation"
     >
-      <NuxtLink class="mb-6 flex items-center gap-3" to="/">
+      <div :class="['mb-6 flex items-center justify-between gap-2', isSidebarCollapsed && 'flex-col']">
+        <NuxtLink :class="['flex min-w-0 items-center gap-3', isSidebarCollapsed && 'justify-center']" to="/" :title="isSidebarCollapsed ? 'Hermes Control Center' : undefined">
         <span class="grid size-10 place-items-center rounded-2xl bg-linear-to-br from-violet-500 to-cyan-400 font-extrabold text-white">H</span>
-        <span>
+        <span v-if="!isSidebarCollapsed">
           <strong>Hermes</strong>
           <small class="block text-xs text-zinc-400">Control Center</small>
         </span>
-      </NuxtLink>
+        </NuxtLink>
+        <button
+          class="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.035] text-zinc-400 transition hover:text-zinc-50"
+          type="button"
+          :aria-label="isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          @click="isSidebarCollapsed = !isSidebarCollapsed"
+        >
+          {{ isSidebarCollapsed ? '›' : '‹' }}
+        </button>
+      </div>
 
       <nav class="grid gap-1.5">
         <NuxtLink
           v-for="item in navItems"
           :key="item.to"
-          :class="[navLinkBase, route.path === item.to && navLinkActive]"
+          :class="[desktopLinkBase, route.path === item.to && navLinkActive]"
           :to="item.to"
+          :title="isSidebarCollapsed ? item.label : undefined"
         >
           <span>{{ item.icon }}</span>
-          {{ item.label }}
+          <span v-if="!isSidebarCollapsed">{{ item.label }}</span>
         </NuxtLink>
       </nav>
     </aside>

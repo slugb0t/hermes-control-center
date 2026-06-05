@@ -32,12 +32,19 @@ interface SessionDetail {
 interface MarkdownSegment {
   type: 'text' | 'code'
   text: string
+  html?: string
   language?: string
 }
 
 interface ToolCallPreview {
   name: string
   arguments: string
+}
+
+interface CodeBlockPreview {
+  label: string
+  language: string
+  text: string
 }
 
 const { data: session, pending, error, refresh } = await useAsyncData<SessionDetail>(`session-${sessionId}`, () => $fetch(`${apiBase}/sessions/${sessionId}?message_limit=80`))
@@ -48,6 +55,7 @@ const expandedTools = ref<Set<number>>(new Set())
 const roleFilter = ref<'all' | 'user' | 'assistant' | 'tool'>('all')
 const copiedKey = ref<string | null>(null)
 const latestAnchor = ref<HTMLElement | null>(null)
+const isSidebarCollapsed = useState('sidebar-collapsed', () => false)
 const previewLength = 1600
 
 const messages = computed(() => session.value?.messages || [])
@@ -101,6 +109,63 @@ const tryFormatStructuredContent = (content: string) => {
 }
 const isStructuredContent = (message: MessageSummary) => message.role === 'tool' || /^[\s]*[\[{]/.test(message.content)
 const formattedContent = (message: MessageSummary) => tryFormatStructuredContent(visibleContent(message))
+const escapeHtml = (content: string) => content
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/\"/g, '&quot;')
+
+const renderInlineMarkdown = (content: string) => escapeHtml(content)
+  .replace(/`([^`]+)`/g, '<code class="rounded-md border border-white/10 bg-black/35 px-1.5 py-0.5 font-mono text-[0.86em] text-cyan-100">$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-zinc-50">$1</strong>')
+  .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a class="text-cyan-200 underline decoration-cyan-200/30 underline-offset-4 hover:text-cyan-100" href="$2" target="_blank" rel="noreferrer">$1</a>')
+
+const renderMarkdown = (content: string) => {
+  const lines = content.split('\n')
+  const html: string[] = []
+  let listItems: string[] = []
+  let paragraph: string[] = []
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return
+    html.push(`<p>${renderInlineMarkdown(paragraph.join(' '))}</p>`)
+    paragraph = []
+  }
+  const flushList = () => {
+    if (!listItems.length) return
+    html.push(`<ul>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('')}</ul>`)
+    listItems = []
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      flushParagraph()
+      flushList()
+      continue
+    }
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed)
+    if (heading) {
+      flushParagraph()
+      flushList()
+      const level = heading[1].length
+      html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`)
+      continue
+    }
+    const bullet = /^[-*]\s+(.+)$/.exec(trimmed)
+    if (bullet) {
+      flushParagraph()
+      listItems.push(bullet[1])
+      continue
+    }
+    flushList()
+    paragraph.push(trimmed)
+  }
+  flushParagraph()
+  flushList()
+  return html.join('')
+}
+
 const markdownSegments = (message: MessageSummary): MarkdownSegment[] => {
   const content = visibleContent(message)
   if (!content) return []
@@ -110,11 +175,17 @@ const markdownSegments = (message: MessageSummary): MarkdownSegment[] => {
   let cursor = 0
   for (const match of content.matchAll(fencePattern)) {
     const index = match.index || 0
-    if (index > cursor) segments.push({ type: 'text', text: content.slice(cursor, index).trim() })
+    if (index > cursor) {
+      const text = content.slice(cursor, index).trim()
+      segments.push({ type: 'text', text, html: renderMarkdown(text) })
+    }
     segments.push({ type: 'code', language: match[1]?.trim() || 'text', text: match[2]?.trimEnd() || '' })
     cursor = index + match[0].length
   }
-  if (cursor < content.length) segments.push({ type: 'text', text: content.slice(cursor).trim() })
+  if (cursor < content.length) {
+    const text = content.slice(cursor).trim()
+    segments.push({ type: 'text', text, html: renderMarkdown(text) })
+  }
   return segments.filter((segment) => segment.text)
 }
 
@@ -135,6 +206,29 @@ const parseToolCalls = (message: MessageSummary): ToolCallPreview[] => {
 }
 const toolCallsByMessageId = computed(() => new Map(messages.value.map((message) => [message.id, parseToolCalls(message)])))
 const toolCallsFor = (message: MessageSummary) => toolCallsByMessageId.value.get(message.id) || []
+const tryParseObject = (value: string): Record<string, unknown> | null => {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+const codeBlocksForToolCall = (call: ToolCallPreview): CodeBlockPreview[] => {
+  const args = tryParseObject(call.arguments)
+  if (!args) return [{ label: 'arguments', language: 'json', text: call.arguments || 'No arguments recorded.' }]
+
+  if (call.name === 'terminal' || 'command' in args) {
+    const blocks: CodeBlockPreview[] = []
+    if (args.command) blocks.push({ label: 'command', language: 'bash', text: String(args.command) })
+    const options = Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'command'))
+    if (Object.keys(options).length) blocks.push({ label: 'options', language: 'json', text: JSON.stringify(options, null, 2) })
+    return blocks.length ? blocks : [{ label: 'arguments', language: 'json', text: JSON.stringify(args, null, 2) }]
+  }
+
+  return [{ label: 'arguments', language: 'json', text: JSON.stringify(args, null, 2) }]
+}
+const hasVisibleBody = (message: MessageSummary) => Boolean(message.content && !message.tool_calls)
 const roleClass = (role: string) => {
   if (role === 'user') return 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100'
   if (role === 'tool') return 'border-amber-300/20 bg-amber-300/10 text-amber-100'
@@ -158,10 +252,11 @@ const copyText = async (key: string, text: string) => {
   }
 }
 const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-[5.75rem]' : 'md:left-[17rem]')
 </script>
 
 <template>
-  <section class="w-full pb-36 max-sm:pb-44">
+  <section class="w-full pb-36 max-md:pb-64 max-sm:pb-72">
     <header class="mb-4 flex min-w-0 items-start justify-between gap-4 max-md:block">
       <div class="min-w-0">
         <p class="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300 max-sm:text-[0.7rem]">Session workspace</p>
@@ -253,12 +348,22 @@ const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smoot
                   {{ copiedKey === `tool-${message.id}-${callIndex}` ? 'Copied' : 'Copy args' }}
                 </button>
               </div>
-              <pre class="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-5 text-zinc-300"><code>{{ call.arguments || 'No arguments recorded.' }}</code></pre>
+              <div class="grid gap-2">
+                <div v-for="block in codeBlocksForToolCall(call)" :key="`${message.id}-${callIndex}-${block.label}`" class="overflow-hidden rounded-xl border border-white/10 bg-black/35">
+                  <div class="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-zinc-500">
+                    <span>{{ block.label }} · {{ block.language }}</span>
+                    <button class="text-zinc-400 hover:text-cyan-100" type="button" @click="copyText(`tool-${message.id}-${callIndex}-${block.label}`, block.text)">
+                      {{ copiedKey === `tool-${message.id}-${callIndex}-${block.label}` ? 'Copied' : 'Copy' }}
+                    </button>
+                  </div>
+                  <pre class="overflow-x-auto p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:normal] [white-space:pre-wrap] max-sm:text-[0.68rem]"><code>{{ block.text }}</code></pre>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="space-y-3">
+        <div v-if="hasVisibleBody(message)" class="space-y-3">
           <template v-for="(segment, index) in markdownSegments(message)" :key="`${message.id}-${index}`">
             <div v-if="segment.type === 'code'" class="overflow-hidden rounded-2xl border border-white/10 bg-black/35">
               <div class="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-zinc-500">
@@ -269,11 +374,9 @@ const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smoot
               </div>
               <pre class="overflow-x-auto p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:normal] [white-space:pre-wrap] max-sm:text-[0.68rem]"><code>{{ segment.text }}</code></pre>
             </div>
-            <p v-else class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6">
-              {{ segment.text }}
-            </p>
+            <div v-else class="message-markdown text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6" v-html="segment.html || renderMarkdown(segment.text)" />
           </template>
-          <p v-if="!message.content" class="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2 text-sm italic text-zinc-500">No visible text was recorded for this message.</p>
+          <p v-if="!message.content && !message.tool_calls" class="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2 text-sm italic text-zinc-500">No visible text was recorded for this message.</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-if="message.content"
@@ -297,7 +400,7 @@ const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smoot
       <div ref="latestAnchor" aria-hidden="true" />
     </div>
 
-    <form class="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-zinc-950/92 px-4 py-3 shadow-[0_-18px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl md:left-[17rem]" @submit.prevent>
+    <form :class="['fixed inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-30 border-t border-white/10 bg-zinc-950/92 px-4 py-3 shadow-[0_-18px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl md:bottom-0', composerSidebarClass]" @submit.prevent>
       <div class="mx-auto flex max-w-5xl items-end gap-2 max-sm:gap-1.5">
         <label class="sr-only" for="session-composer">Message Hermes</label>
         <textarea
@@ -317,3 +420,52 @@ const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smoot
     </form>
   </section>
 </template>
+
+<style scoped>
+.message-markdown :deep(p) {
+  margin-bottom: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-markdown :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.message-markdown :deep(h1),
+.message-markdown :deep(h2),
+.message-markdown :deep(h3) {
+  margin: 1.1rem 0 0.55rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgb(244 244 245);
+}
+
+.message-markdown :deep(h1:first-child),
+.message-markdown :deep(h2:first-child),
+.message-markdown :deep(h3:first-child) {
+  margin-top: 0;
+}
+
+.message-markdown :deep(h1) {
+  font-size: 1.35rem;
+}
+
+.message-markdown :deep(h2) {
+  font-size: 1.12rem;
+}
+
+.message-markdown :deep(h3) {
+  font-size: 1rem;
+}
+
+.message-markdown :deep(ul) {
+  margin: 0.5rem 0 0.85rem 1.15rem;
+  list-style: disc;
+}
+
+.message-markdown :deep(li) {
+  margin: 0.25rem 0;
+  padding-left: 0.1rem;
+}
+</style>
