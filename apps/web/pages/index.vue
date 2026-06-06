@@ -77,20 +77,20 @@ const formatTime = (value: string | null) => value ? new Date(value).toLocaleStr
         <p class="mt-2 break-words leading-relaxed text-zinc-400">{{ card.hint }}</p>
       </article>
 
-      <article :class="[cardClass, 'col-span-7 max-md:col-span-1']">
+      <article :class="[cardClass, 'col-span-7 min-w-0 overflow-hidden max-md:col-span-1']">
         <div class="mb-4 flex items-center justify-between gap-3">
           <h2 class="text-base font-bold">Recent sessions</h2>
           <NuxtLink class="text-sm font-bold text-cyan-300" to="/sessions">View all</NuxtLink>
         </div>
         <ul class="grid gap-3">
-          <li v-for="session in sessions" :key="session.id" class="rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
+          <li v-for="session in sessions" :key="session.id" class="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
             <NuxtLink :to="`/sessions/${session.id}`" class="block">
               <div class="flex items-start justify-between gap-3 max-sm:block">
                 <strong>{{ session.title }}</strong>
                 <small class="text-zinc-400">{{ formatTime(session.last_activity_at) }}</small>
               </div>
-              <p class="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-400">{{ session.preview }}</p>
-              <p class="mt-2 text-xs uppercase tracking-[0.12em] text-zinc-500">
+              <p class="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-400 [overflow-wrap:anywhere]">{{ session.preview }}</p>
+              <p class="mt-2 text-xs uppercase tracking-[0.12em] text-zinc-500 [overflow-wrap:anywhere]">
                 {{ session.source }} · {{ session.message_count }} messages · {{ session.tool_call_count }} tools
               </p>
             </NuxtLink>
@@ -98,15 +98,15 @@ const formatTime = (value: string | null) => value ? new Date(value).toLocaleStr
         </ul>
       </article>
 
-      <article :class="[cardClass, 'col-span-5 max-md:col-span-1']">
+      <article :class="[cardClass, 'col-span-5 min-w-0 overflow-hidden max-md:col-span-1']">
         <h2 class="mb-4 text-base font-bold">Recent activity</h2>
         <ul class="grid gap-3">
-          <li v-for="item in activity" :key="item.id" class="rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
+          <li v-for="item in activity" :key="item.id" class="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3.5">
             <div class="mb-2 flex items-center justify-between gap-3">
               <span class="text-xs font-bold uppercase tracking-[0.12em] text-cyan-300">{{ item.tool_name || item.role }}</span>
               <small class="text-zinc-500">{{ formatTime(item.timestamp) }}</small>
             </div>
-            <p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300">{{ item.content }}</p>
+            <p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-300 [overflow-wrap:anywhere]">{{ item.content }}</p>
           </li>
         </ul>
       </article>
