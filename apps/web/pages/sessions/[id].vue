@@ -253,11 +253,27 @@ const copyText = async (key: string, text: string) => {
   }
 }
 const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+const openAtLatest = async () => {
+  await nextTick()
+  latestAnchor.value?.scrollIntoView({ behavior: 'auto', block: 'end' })
+}
 const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-[5.75rem]' : 'md:left-[17rem]')
+
+let stopOpenAtLatestWatcher: (() => void) | undefined
+onMounted(() => {
+  openAtLatest()
+  stopOpenAtLatestWatcher = watch(messages, async (nextMessages) => {
+    if (!nextMessages.length) return
+    await openAtLatest()
+    stopOpenAtLatestWatcher?.()
+    stopOpenAtLatestWatcher = undefined
+  }, { flush: 'post' })
+})
+onBeforeUnmount(() => stopOpenAtLatestWatcher?.())
 </script>
 
 <template>
-  <section class="w-full pb-36 max-md:pb-64 max-sm:pb-72">
+  <section class="w-full pb-36 max-md:pb-24">
     <header class="mb-4 flex min-w-0 items-start justify-between gap-4 max-md:block">
       <div class="min-w-0">
         <p class="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300 max-sm:text-[0.7rem]">Session workspace</p>
@@ -357,7 +373,7 @@ const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-
                       {{ copiedKey === `tool-${message.id}-${callIndex}-${block.label}` ? 'Copied' : 'Copy' }}
                     </button>
                   </div>
-                  <pre class="overflow-x-auto p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:normal] [white-space:pre-wrap] max-sm:text-[0.68rem]"><code>{{ block.text }}</code></pre>
+                  <pre class="overflow-x-auto p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:anywhere] [white-space:pre-wrap] max-sm:text-[0.68rem]"><code>{{ block.text }}</code></pre>
                 </div>
               </div>
             </div>
@@ -373,7 +389,7 @@ const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-
                   {{ copiedKey === `code-${message.id}-${index}` ? 'Copied' : 'Copy' }}
                 </button>
               </div>
-              <pre class="overflow-x-auto p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:normal] [white-space:pre-wrap] max-sm:text-[0.68rem]"><code>{{ segment.text }}</code></pre>
+              <pre class="overflow-x-auto p-3 font-mono text-[0.72rem] leading-5 text-zinc-200 [overflow-wrap:anywhere] [white-space:pre-wrap] max-sm:text-[0.68rem]"><code>{{ segment.text }}</code></pre>
             </div>
             <div v-else class="message-markdown text-sm leading-relaxed text-zinc-200 max-sm:text-[0.82rem] max-sm:leading-6" v-html="segment.html || renderMarkdown(segment.text)" />
           </template>
@@ -401,7 +417,7 @@ const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-
       <div ref="latestAnchor" aria-hidden="true" />
     </div>
 
-    <form :class="['fixed inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-30 border-t border-white/10 bg-zinc-950/92 px-4 py-3 shadow-[0_-18px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl md:bottom-0', composerSidebarClass]" @submit.prevent>
+    <form :class="['fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-zinc-950/92 px-4 py-3 shadow-[0_-18px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl max-md:hidden', composerSidebarClass]" @submit.prevent>
       <div class="mx-auto flex max-w-5xl items-end gap-2 max-sm:gap-1.5">
         <label class="sr-only" for="session-composer">Message Hermes</label>
         <textarea
