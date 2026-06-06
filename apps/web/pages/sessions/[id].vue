@@ -274,54 +274,56 @@ onBeforeUnmount(() => stopOpenAtLatestWatcher?.())
 
 <template>
   <section class="w-full pb-36 max-md:pb-24">
-    <header class="mb-4 flex min-w-0 items-start justify-between gap-4 max-md:block">
-      <div class="min-w-0">
-        <p class="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300 max-sm:text-[0.7rem]">Session workspace</p>
-        <h1 class="mb-3 max-w-5xl text-[clamp(2rem,6vw,4.5rem)] font-bold leading-[0.98] tracking-[-0.06em] text-balance max-sm:text-[clamp(1.65rem,9vw,2.55rem)] max-sm:tracking-[-0.045em]">
-          {{ session?.title || 'Loading session…' }}
-        </h1>
-        <div class="flex max-w-4xl flex-wrap gap-2 text-xs text-zinc-400 sm:text-sm">
-          <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ shortSessionId }}</span>
-          <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ session?.source || 'unknown source' }}</span>
-          <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ session?.message_count ?? '—' }} messages</span>
-          <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ session?.tool_call_count ?? '—' }} tools</span>
-          <span class="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 font-bold" :class="statusClass">
-            <span class="size-1.5 rounded-full" :class="statusDotClass" />
-            {{ statusLabel }}
-          </span>
+    <div class="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/10 bg-[#050507]/88 px-5 pt-5 pb-4 shadow-[0_18px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl max-md:static max-md:-mx-0 max-md:border-b-0 max-md:bg-transparent max-md:px-0 max-md:pt-0 max-md:shadow-none max-md:backdrop-blur-none">
+      <header class="mb-4 flex min-w-0 items-start justify-between gap-4 max-md:block">
+        <div class="min-w-0">
+          <p class="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300 max-sm:text-[0.7rem]">Session workspace</p>
+          <h1 class="mb-3 max-w-5xl text-[clamp(2rem,6vw,4.5rem)] font-bold leading-[0.98] tracking-[-0.06em] text-balance max-sm:text-[clamp(1.65rem,9vw,2.55rem)] max-sm:tracking-[-0.045em]">
+            {{ session?.title || 'Loading session…' }}
+          </h1>
+          <div class="flex max-w-4xl flex-wrap gap-2 text-xs text-zinc-400 sm:text-sm">
+            <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ shortSessionId }}</span>
+            <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ session?.source || 'unknown source' }}</span>
+            <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ session?.message_count ?? '—' }} messages</span>
+            <span class="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">{{ session?.tool_call_count ?? '—' }} tools</span>
+            <span class="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 font-bold" :class="statusClass">
+              <span class="size-1.5 rounded-full" :class="statusDotClass" />
+              {{ statusLabel }}
+            </span>
+          </div>
         </div>
-      </div>
-      <div class="mt-1 flex shrink-0 gap-2 max-md:mt-4 max-sm:grid max-sm:grid-cols-2">
-        <button class="inline-flex rounded-2xl border border-white/10 bg-zinc-800/95 px-3.5 py-3 font-bold max-sm:justify-center max-sm:py-2.5 max-sm:text-sm" type="button" @click="refresh()">
-          Refresh
-        </button>
-        <NuxtLink class="inline-flex rounded-2xl border border-white/10 bg-zinc-800/95 px-3.5 py-3 font-bold max-sm:justify-center max-sm:py-2.5 max-sm:text-sm" to="/sessions">
-          Back
-        </NuxtLink>
-      </div>
-    </header>
+        <div class="mt-1 flex shrink-0 gap-2 max-md:mt-4 max-sm:grid max-sm:grid-cols-2">
+          <button class="inline-flex rounded-2xl border border-white/10 bg-zinc-800/95 px-3.5 py-3 font-bold max-sm:justify-center max-sm:py-2.5 max-sm:text-sm" type="button" @click="refresh()">
+            Refresh
+          </button>
+          <NuxtLink class="inline-flex rounded-2xl border border-white/10 bg-zinc-800/95 px-3.5 py-3 font-bold max-sm:justify-center max-sm:py-2.5 max-sm:text-sm" to="/sessions">
+            Back
+          </NuxtLink>
+        </div>
+      </header>
 
-    <section class="sticky top-3 z-10 mb-4 rounded-[1.2rem] border border-white/10 bg-zinc-950/80 p-3 shadow-[0_18px_80px_rgba(0,0,0,0.26)] backdrop-blur-2xl max-sm:static">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="item in availableRoles"
-            :key="item.value"
-            type="button"
-            :class="[
-              'rounded-full border px-3 py-1.5 text-xs font-bold transition',
-              roleFilter === item.value ? 'border-cyan-300/40 bg-cyan-300/10 text-cyan-100' : 'border-white/10 bg-white/[0.035] text-zinc-400 hover:text-zinc-100'
-            ]"
-            @click="roleFilter = item.value as typeof roleFilter"
-          >
-            {{ item.label }} · {{ item.count }}
+      <section class="rounded-[1.2rem] border border-white/10 bg-zinc-950/80 p-3 shadow-[0_18px_80px_rgba(0,0,0,0.26)] backdrop-blur-2xl">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="item in availableRoles"
+              :key="item.value"
+              type="button"
+              :class="[
+                'rounded-full border px-3 py-1.5 text-xs font-bold transition',
+                roleFilter === item.value ? 'border-cyan-300/40 bg-cyan-300/10 text-cyan-100' : 'border-white/10 bg-white/[0.035] text-zinc-400 hover:text-zinc-100'
+              ]"
+              @click="roleFilter = item.value as typeof roleFilter"
+            >
+              {{ item.label }} · {{ item.count }}
+            </button>
+          </div>
+          <button class="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs font-bold text-zinc-300 transition hover:text-cyan-100" type="button" @click="jumpToLatest">
+            Jump to latest
           </button>
         </div>
-        <button class="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs font-bold text-zinc-300 transition hover:text-cyan-100" type="button" @click="jumpToLatest">
-          Jump to latest
-        </button>
-      </div>
-    </section>
+      </section>
+    </div>
 
     <div v-if="pending" class="rounded-[1.35rem] border border-white/10 bg-zinc-900/70 p-6 text-zinc-400">
       Loading session messages…
