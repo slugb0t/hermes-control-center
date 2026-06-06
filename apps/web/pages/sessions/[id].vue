@@ -254,14 +254,22 @@ const copyText = async (key: string, text: string) => {
 }
 const jumpToLatest = () => latestAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
 const openAtLatest = async () => {
-  if (!import.meta.client) return
   await nextTick()
   latestAnchor.value?.scrollIntoView({ behavior: 'auto', block: 'end' })
 }
 const composerSidebarClass = computed(() => isSidebarCollapsed.value ? 'md:left-[5.75rem]' : 'md:left-[17rem]')
 
-onMounted(openAtLatest)
-watch(messages, () => openAtLatest(), { once: true })
+let stopOpenAtLatestWatcher: (() => void) | undefined
+onMounted(() => {
+  openAtLatest()
+  stopOpenAtLatestWatcher = watch(messages, async (nextMessages) => {
+    if (!nextMessages.length) return
+    await openAtLatest()
+    stopOpenAtLatestWatcher?.()
+    stopOpenAtLatestWatcher = undefined
+  }, { flush: 'post' })
+})
+onBeforeUnmount(() => stopOpenAtLatestWatcher?.())
 </script>
 
 <template>
