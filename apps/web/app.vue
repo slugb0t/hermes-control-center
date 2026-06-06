@@ -16,6 +16,7 @@ const bottomLinkBase = 'grid min-h-14 place-items-center gap-0.5 rounded-2xl tex
 const bottomLinkActive = 'bg-violet-500/15 text-zinc-50'
 const isAuthRoute = computed(() => route.path === '/login')
 const isSidebarCollapsed = useState('sidebar-collapsed', () => false)
+const isMobileNavOpen = useState('mobile-nav-open', () => false)
 const layoutClass = computed(() => {
   if (isAuthRoute.value) return ''
   return isSidebarCollapsed.value ? 'md:grid md:grid-cols-[5.75rem_minmax(0,1fr)]' : 'md:grid md:grid-cols-[17rem_minmax(0,1fr)]'
@@ -24,6 +25,10 @@ const desktopLinkBase = computed(() => [
   navLinkBase,
   isSidebarCollapsed.value && 'justify-center px-2.5'
 ])
+
+watch(() => route.path, () => {
+  isMobileNavOpen.value = false
+})
 </script>
 
 <template>
@@ -72,9 +77,25 @@ const desktopLinkBase = computed(() => [
       <NuxtPage />
     </main>
 
+    <button
+      v-if="!isAuthRoute"
+      type="button"
+      class="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 z-30 grid size-12 place-items-center rounded-2xl border border-white/10 bg-zinc-950/92 text-lg text-zinc-200 shadow-[0_18px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:hidden"
+      :aria-expanded="isMobileNavOpen"
+      aria-controls="mobile-navigation"
+      :aria-label="isMobileNavOpen ? 'Hide mobile navigation' : 'Show mobile navigation'"
+      @click="isMobileNavOpen = !isMobileNavOpen"
+    >
+      {{ isMobileNavOpen ? '×' : '☰' }}
+    </button>
+
     <nav
       v-if="!isAuthRoute"
-      class="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-20 hidden grid-cols-5 gap-1 rounded-[1.4rem] border border-white/10 bg-zinc-950/90 p-2 shadow-[0_18px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl supports-[padding:max(0px)]:bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-md:grid"
+      id="mobile-navigation"
+      :class="[
+        'fixed inset-x-3 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 hidden grid-cols-5 gap-1 rounded-[1.4rem] border border-white/10 bg-zinc-950/90 p-2 shadow-[0_18px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl supports-[padding:max(0px)]:bottom-[max(4.25rem,env(safe-area-inset-bottom))]',
+        isMobileNavOpen ? 'max-md:grid' : 'max-md:hidden'
+      ]"
       aria-label="Mobile navigation"
     >
       <NuxtLink
